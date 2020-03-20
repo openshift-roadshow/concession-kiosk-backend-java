@@ -126,8 +126,6 @@ public class ConcessionsController {
                         MongoClientSettings.builder()
                                 .applyToClusterSettings(builder ->
                                         builder.hosts(Arrays.asList(new ServerAddress(host, port))))
-                                .applyToSocketSettings(builder ->
-                                        builder.connectTimeout(2, TimeUnit.SECONDS))
                                 .credential(credentials)
                                 .build());
             } catch (MongoSocketOpenException e) {
