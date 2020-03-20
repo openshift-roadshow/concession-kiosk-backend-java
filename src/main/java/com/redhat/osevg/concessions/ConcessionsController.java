@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 @RestController
 public class ConcessionsController {
@@ -52,8 +53,8 @@ public class ConcessionsController {
 
         // Add the order to the database
         Document document = new Document()
-            .append("ticketNumber", nextTicket)
-            .append("order", order);
+                .append("ticketNumber", nextTicket)
+                .append("order", order);
         collection.insertOne(document);
 
         // Package the response
@@ -67,15 +68,14 @@ public class ConcessionsController {
 
     @GetMapping("/debug")
     public Map debug() {
+        MongoClient mongoClient = mongoClient();
         boolean connected = false;
 
         try {
-            MongoClient mongoClient = mongoClient();
-            mongoClient.listDatabaseNames();
+            mongoClient.listDatabaseNames().iterator().next();
             connected = true;
-        } catch (MongoTimeoutException e) {
-            // Expected if the DB isn't found
-            logger.info("Timeout trying to connect to database");
+        } catch (Exception e) {
+            logger.error("Error listing databases");
         }
 
         Map results = new HashMap();
@@ -116,21 +116,36 @@ public class ConcessionsController {
             logger.info("Password: {}", password);
             logger.info("Database: {}", databaseName);
 
-            MongoCredential credentials =  MongoCredential.createCredential(
+            MongoCredential credentials = MongoCredential.createCredential(
                     username,
                     databaseName,
                     password.toCharArray());
 
-            client = MongoClients.create(
-                    MongoClientSettings.builder()
-                            .applyToClusterSettings(builder ->
-                                    builder.hosts(Arrays.asList(new ServerAddress(host, port))))
-                            .credential(credentials)
-                            .build());
-        }
-        else {
+            try {
+                client = MongoClients.create(
+                        MongoClientSettings.builder()
+                                .applyToClusterSettings(builder ->
+                                        builder.hosts(Arrays.asList(new ServerAddress(host, port))))
+                                .applyToSocketSettings(builder ->
+                                        builder.connectTimeout(2, TimeUnit.SECONDS))
+                                .credential(credentials)
+                                .build());
+            } catch (MongoSocketOpenException e) {
+                client = null;
+            }
+        } else {
             // If the environment variables aren't included, default to a simple local connection
-            client = MongoClients.create("mongodb://localhost:27017");
+            try {
+                client = MongoClients.create(
+                        MongoClientSettings.builder()
+                                .applyToClusterSettings(builder ->
+                                        builder.hosts(Arrays.asList(new ServerAddress("localhost", 27017))))
+                                .applyToClusterSettings(builder ->
+                                        builder.serverSelectionTimeout(2, TimeUnit.SECONDS))
+                                .build());
+            } catch (MongoSocketOpenException e) {
+                client = null;
+            }
             databaseName = "concessions";
         }
 
