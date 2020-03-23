@@ -74,8 +74,12 @@ public class ConcessionsController {
         try {
             mongoClient.listDatabaseNames().iterator().next();
             connected = true;
+        } catch(MongoCommandException mce) {
+            // Will occur if the DB connects but the user doesn't have permission to read all
+            // databases; for our purposes, this is an ugly connected check
+            connected = true;
         } catch (Exception e) {
-            logger.error("Error listing databases");
+            logger.error("Error listing collections", e);
         }
 
         Map results = new HashMap();
